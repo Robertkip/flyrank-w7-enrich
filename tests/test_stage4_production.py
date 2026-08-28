@@ -192,3 +192,16 @@ def test_stub_mode_makes_zero_model_calls(fake_model, monkeypatch):
     monkeypatch.setenv("LLM_STUB", "1")
     assert client.post("/enrich", json=VALID).status_code == 200
     assert calls == []
+
+
+def test_the_route_does_not_block_the_event_loop():
+    """A 30-60s blocking model call in an `async def` route would stall every other
+    request, including health checks. A plain `def` route runs in a threadpool."""
+    import inspect
+
+    from src.routes.enrich import enrich
+
+    assert not inspect.iscoroutinefunction(enrich), (
+        "enrich() blocks on a slow model call, so it must be `def` (threadpool), "
+        "not `async def` (event loop)"
+    )

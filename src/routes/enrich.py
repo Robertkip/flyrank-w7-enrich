@@ -32,7 +32,11 @@ def _error(status: int, message: str, detail: str | None = None) -> JSONResponse
     tags=["enrich"],
     summary="Categorise, summarise and quality-flag a scraped book record",
 )
-async def enrich(payload: EnrichRequest):
+def enrich(payload: EnrichRequest):
+    # Deliberately `def`, not `async def`. The pipeline blocks for 30-60 seconds on a
+    # CPU-bound local model. In an `async def` route that would block the event loop and
+    # serialise every other request behind it, including /health. FastAPI runs a plain
+    # `def` route in a threadpool instead, so slow model calls stay in their own lane.
     # FastAPI has already validated the input against EnrichRequest by this point.
     # Every request rejected there is a model call we did not pay for.
 

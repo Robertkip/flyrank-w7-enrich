@@ -1,0 +1,115 @@
+[
+  {
+    "id": "poetry-clear",
+    "note": "Unambiguous: the blurb says 'collection of poetry and drawings'.",
+    "input": {
+      "title": "A Light in the Attic",
+      "description": "It's hard to imagine a world without A Light in the Attic. This now-classic collection of poetry and drawings from Shel Silverstein celebrates its 20th anniversary with this special edition. Silverstein's humorous and creative verse can amuse the dowdiest of readers. Lemon-faced adults and fidgety kids sit still and read these rhythmic words and laugh and smile and love that Silverstein. Need proof of his genius? RockabyeRockabye baby, in the treetopDon't you know a treetopIs no safe place to rock?And who put you up there,And your cradle, too?Baby, I think someone down here'sGot it in for you. Shel, you never sounded so good.",
+      "rating": 3
+    },
+    "expect": {
+      "category": "poetry",
+      "audience": "general"
+    }
+  },
+  {
+    "id": "thriller-clear",
+    "note": "Marketed against The Girl on the Train; a marriage hiding a terrifying secret.",
+    "input": {
+      "title": "Behind Closed Doors",
+      "description": "The 2016 debut bloggers can't stop raving about. Perfect for fans of The Girl on the Train and The Ice Twins Everyone knows a couple like Jack and Grace.He has looks and wealth, she has charm and elegance. You might not want to like them, but you do. Though, you’d like to get to know Grace better.But it’s difficult, because you realise Jack and Grace are never apart.Some might call this true love. Others might ask why Grace never answers the phone. Or how she can never meet for coffee, even though she doesn’t work. How she can cook such elaborate meals but remain so slim. And why there are bars on one of the bedroom windows.Sometimes, the perfect marriage is the perfect lie.",
+      "rating": 4
+    },
+    "expect": {
+      "category": "mystery-thriller",
+      "audience": "adult"
+    }
+  },
+  {
+    "id": "cookery-clear",
+    "note": "A canning and preserving guide from America's Test Kitchen.",
+    "input": {
+      "title": "Foolproof Preserving",
+      "description": "Canning perfected the America’s Test Kitchen way. The art of preserving produce by canning and preserving has come full circle from grandmother's kitchen to a whole new generation now eager to learn it. This detailed guide to home preserving is perfect for novice canners and experts alike and offers more than 100 foolproof recipes across a wide range of categories, from sweet jams and jellies to savory jams, vegetables, condiments, pickles, whole fruits, and more. Let the experts at America's Test Kitchen show you how to do it right with detailed tutorials, troubleshooting tips, equipment information, and insight into the science behind canning.",
+      "rating": 3
+    },
+    "expect": {
+      "category": "food-drink",
+      "audience": "general"
+    }
+  },
+  {
+    "id": "travel-clear",
+    "note": "A year backpacking South Africa to Singapore. Travel memoir.",
+    "input": {
+      "title": "It's Only the Himalayas",
+      "description": "“Wherever you go, whatever you do, just . . . don’t do anything stupid.” —My MotherDuring her yearlong adventure backpacking from South Africa to Singapore, S. Bedford definitely did a few things her mother might classify as \"stupid.\" She swam with great white sharks in South Africa, ran from lions in Zimbabwe, climbed a Himalayan mountain without training in Nepal, and watched as her friend was attacked by a monkey in Indonesia.But interspersed in those slightly more crazy moments, Sue Bedfored and her friend \"Sara the Stoic\" experienced the sights, sounds, life, and culture of fifteen countries. Joined along the way by a few friends and their aging fathers here and there, Sue and Sara experience the trip of a lifetime. They fall in love with the world, cultivate an appreciation for home, and discover who, or what, they want to become.It's Only the Himalayas is the incredibly funny, som",
+      "rating": 2
+    },
+    "expect": {
+      "category": "travel",
+      "audience": "adult"
+    }
+  },
+  {
+    "id": "scifi-anthology",
+    "note": "An anthology of early science fiction short stories.",
+    "input": {
+      "title": "Mesaerion: The Best Science Fiction Stories 1800-1849",
+      "description": "Andrew Barger, award-winning author and engineer, has extensively researched forgotten journals and magazines of the early 19th century to locate groundbreaking science fiction short stories in the English language. In doing so, he found what is possibly the first science fiction story by a female (and it is not from Mary Shelley). Andrew located the first steampunk short story, which has not been republished since 1844. There is the first voyage to the moon in a balloon, republished for the first time since 1820 that further tells of a darkness machine and a lunarian named Zuloc. Other sci-stories include the first robotic insect and an electricity gun. Once again, Andrew has searched old texts to find the very best science fiction stories from the period when the genre automated to life, some of the stories are published for the first time in nearly 200 years. Read these fantastic stor",
+      "rating": 1
+    },
+    "expect": {
+      "category": "sci-fi-fantasy",
+      "audience": "adult"
+    }
+  },
+  {
+    "id": "romance-clear",
+    "note": "A chef and a counterterrorist operative; book 2 of 'Paris Nights'.",
+    "input": {
+      "title": "Chase Me (Paris Nights #2)",
+      "description": "A Michelin two-star chef at twenty-eight, Violette Lenoir could handle anything, including a cocky burglar who broke into her restaurant in the middle of the night.Or so she thought.Elite counterterrorist operative Chase “Smith” had been through things that made Hell Week look easy. But nothing had prepared him for a leather-clad blonde who held him at bay at knifepoint and dared him to take her on.Now if only saving the world didn’t require he ruin her life.Two people who thought they could handle anything now have to take on each other. It's a battle neither one expected. But with their futures on the line, they have nothing to lose...but their hearts.Warning: This book contains one arrogant Navy SEAL, nights of Paris passion, and a woman who wants to have it all.",
+      "rating": 5
+    },
+    "expect": {
+      "category": "romance",
+      "audience": "adult"
+    }
+  },
+  {
+    "id": "ambiguous-olio",
+    "note": "AMBIGUOUS. Part fact part fiction, sonnet and song, about real performers. Defensibly poetry OR history-biography. I label poetry (Pulitzer for Poetry), but 'other' with low confidence is an acceptable honest answer.",
+    "input": {
+      "title": "Olio",
+      "description": "Part fact, part fiction, Tyehimba Jess's much anticipated second book weaves sonnet, song, and narrative to examine the lives of mostly unrecorded African American performers directly before and after the Civil War up to World War I. Olio is an effort to understand how they met, resisted, complicated, co-opted, and sometimes defeated attempts to minstrelize them.So, while I lead this choir, I still find thatI'm being led…I'm a missionarymending my faith in the midst of this flock…I toil in their fields of praise. When folks seethese freedmen stand and sing, they hear their Godspeak in tongues. These nine dark mouths sing shelter;they echo a hymn's haven from slavery's weather.Detroit native Tyehimba Jess' first book of poetry, leadbelly, was a winner of the 2004 National Poetry Series. Jess, a Cave Canem and NYU Alumni, has received fellowships from the Whiting Foundation, National Endow",
+      "rating": 1
+    },
+    "expect": {
+      "category": "poetry",
+      "audience": "adult"
+    },
+    "accept_also": [
+      "other",
+      "history-biography"
+    ]
+  },
+  {
+    "id": "unsure-empty",
+    "note": "WHEN-UNSURE RULE. No description at all. Must return 'other' with confidence below 0.5 and flag missing_description. This is the case that proves the model admits ignorance instead of guessing.",
+    "input": {
+      "title": "Penny Maybe",
+      "description": ""
+    },
+    "expect": {
+      "category": "other",
+      "audience": "general"
+    },
+    "require": {
+      "max_confidence": 0.5,
+      "flags_include": [
+        "missing_description"
+      ]
+    }
+  }
+]
