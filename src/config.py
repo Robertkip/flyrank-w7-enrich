@@ -34,8 +34,15 @@ def model() -> str:
 
 
 def timeout_seconds() -> float:
-    """Explicit. The SDK default is ten minutes, which is not a timeout at all."""
-    return float(os.getenv("LLM_TIMEOUT_SECONDS", "30"))
+    """Explicit, and measured rather than guessed.
+
+    The SDK default is ten minutes, which is not a timeout at all. 60s is the
+    assignment's ceiling and comfortably above what this hardware actually needs:
+    measured on CPU with the real prompt, qwen2.5:7b answers in 31-35s warm and
+    llama3.2:1b in 7-13s. A cold start (model not yet in RAM) adds ~30s, which is
+    why this is not set to 30.
+    """
+    return float(os.getenv("LLM_TIMEOUT_SECONDS", "60"))
 
 
 def max_attempts() -> int:

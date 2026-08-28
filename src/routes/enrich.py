@@ -1,8 +1,10 @@
 """POST /enrich — one scraped book record in, one validated answer out."""
 
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 from src import config
+from src.llm import pipeline
 from src.llm.schema import STUB_RESPONSE, EnrichRequest, EnrichResponse, ErrorResponse
 
 router = APIRouter()
@@ -28,5 +30,7 @@ async def enrich(payload: EnrichRequest) -> EnrichResponse:
     if config.stub_mode():
         return STUB_RESPONSE
 
-    # Stage 2 replaces this with the real pipeline.
-    return STUB_RESPONSE
+    # Stage 2: call the model, return its raw text so we can read it with our own
+    # eyes before trusting it. Stage 3 puts this behind the schema.
+    raw = pipeline.enrich_raw(payload.title, payload.description, payload.rating)
+    return JSONResponse(content={"raw_model_text": raw})
