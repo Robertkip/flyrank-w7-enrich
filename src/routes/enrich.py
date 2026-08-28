@@ -1,20 +1,28 @@
 """POST /enrich — one scraped book record in, one validated answer out."""
 
+import logging
+
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from src import config
-from src.llm import pipeline
+from src.llm import pipeline, retry
 from src.llm.schema import STUB_RESPONSE, EnrichRequest, EnrichResponse, ErrorResponse
 
+log = logging.getLogger(__name__)
 router = APIRouter()
 
 RESPONSES = {
     400: {"model": ErrorResponse, "description": "Input failed validation. No model call was made."},
     422: {"model": ErrorResponse, "description": "The model could not produce a valid answer, even after one repair."},
+    502: {"model": ErrorResponse, "description": "The provider refused the request (bad key, forbidden, no such model). Not retried."},
     503: {"model": ErrorResponse, "description": "The kill switch is on (LLM_ENABLED=false)."},
     504: {"model": ErrorResponse, "description": "The model did not answer within the timeout."},
 }
+
+
+def _error(status: int, message: str, detail: str | None = None) -> JSONResponse:
+    return JSONResponse(status_code=status, content=ErrorResponse(error=message, detail=detail).model_dump())
 
 
 @router.post(
@@ -24,13 +32,41 @@ RESPONSES = {
     tags=["enrich"],
     summary="Categorise, summarise and quality-flag a scraped book record",
 )
-async def enrich(payload: EnrichRequest) -> EnrichResponse:
+async def enrich(payload: EnrichRequest):
     # FastAPI has already validated the input against EnrichRequest by this point.
-    # Every request rejected here is a model call we did not pay for.
+    # Every request rejected there is a model call we did not pay for.
+
+    # The kill switch, checked before the client is even constructed. The day the
+    # provider has an outage or the bill spikes, somebody who is not the author of
+    # this file needs to turn it off without a deploy.
+    if not config.llm_enabled():
+        return _error(
+            503,
+            "Enrichment is turned off (LLM_ENABLED=false).",
+            "The model was not called. Retry later or set LLM_ENABLED=true.",
+        )
+
     if config.stub_mode():
         return STUB_RESPONSE
 
-    # Stage 2: call the model, return its raw text so we can read it with our own
-    # eyes before trusting it. Stage 3 puts this behind the schema.
-    raw = pipeline.enrich_raw(payload.title, payload.description, payload.rating)
-    return JSONResponse(content={"raw_model_text": raw})
+    try:
+        result = pipeline.enrich(payload.title, payload.description, payload.rating)
+    except retry.TimeoutExhausted as exc:
+        log.warning("enrich timed out: %s", exc)
+        return _error(504, "The model did not answer in time.", str(exc))
+    except retry.ProviderRefused as exc:
+        log.error("provider refused: %s", exc)
+        return _error(502, "The model provider refused the request.", str(exc))
+    except pipeline.EnrichFailed as exc:
+        # Note what is NOT in this response: exc.raw_output. The raw model text went
+        # to logs/quarantine.jsonl, where a human can read it. It is never returned.
+        # If this API could emit an arbitrary string a model wrote, it would not have
+        # a contract, and everything downstream would have to defend itself.
+        log.warning("enrich failed validation twice: %s", exc)
+        return _error(
+            422,
+            "The model could not produce a valid answer for this record.",
+            f"Rejected after one repair attempt: {exc}",
+        )
+
+    return result.response

@@ -3,13 +3,6 @@
 Every test here runs with zero model calls.
 """
 
-import os
-
-os.environ.setdefault("LLM_BASE_URL", "http://localhost:11434/v1/")
-os.environ.setdefault("LLM_API_KEY", "ollama")
-os.environ.setdefault("LLM_MODEL", "qwen2.5:7b")
-os.environ["LLM_STUB"] = "1"
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -17,6 +10,17 @@ from src.llm.schema import EnrichResponse
 from src.main import app
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def stub_mode(monkeypatch):
+    """Stage 1 is the contract before the model exists, so every test here is stubbed.
+
+    Set per-test via monkeypatch, not module-level os.environ, so it cannot leak
+    into the test modules that need the model path live.
+    """
+    monkeypatch.setenv("LLM_STUB", "1")
+
 
 VALID = {
     "title": "A Light in the Attic",
