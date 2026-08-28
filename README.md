@@ -58,10 +58,12 @@ curl -X POST http://localhost:8000/enrich \
 }
 ```
 
-That is the actual response, copied from the terminal, with the model warm. **Run it as
-the very first request after starting up and you will get a `504` instead** — see the
-cold-start note below. It is a real property of running a 7B model on a CPU, and the
-endpoint handles it correctly rather than hanging.
+That is the actual response, copied from the terminal.
+
+**On first boot the server takes a while to become ready.** It warms the model before
+accepting requests — on this CPU-only machine that took 200 seconds from fully cold. Wait
+for `warm-up done` in the log, then the curl above answers in ~37s. Why that is necessary
+is in *The cold start, and two wrong fixes* below.
 
 ### And one that is deliberately broken
 
@@ -136,8 +138,61 @@ three values and not a refactor.
 | **Retry on** | timeouts, connection errors, `408`, `429`, `5xx` — up to 3 attempts, backoff ~1s / 2s / 4s plus jitter, obeying `Retry-After` when the provider sends it. |
 | **Never retry** | `400`, `401`, `403`, `404`, `422`. A bad key will still be a bad key in four seconds, and on a metered tier every pointless retry is real quota spent to reach the same answer. |
 | **Repair** | Exactly once. The second call carries the broken output and the exact validation error back to the model. A third failure is a `422`, not a third guess. |
+| **Total deadline** | **90 seconds** per request across all retries (`LLM_DEADLINE_SECONDS`). The per-call timeout bounds one call; without this, 3 attempts × 60s meant a caller waited three minutes to be told no. |
+| **Warm-up** | On startup the service sends one request carrying the real system prompt, with its own 600s budget, so the first caller pays neither the weight-load nor the prompt-prefill cost. |
 | **Kill switch** | `LLM_ENABLED=false` → `503` immediately, zero model calls, no deploy needed. |
 | **Stub mode** | `LLM_STUB=1` → a canned schema-valid answer, zero model calls. This is how every stage after Stage 1 was built and debugged. |
+
+### The cold start, and two wrong fixes
+
+This is the part I got wrong twice, so it is worth writing down properly.
+
+Verifying my own README, I started a fresh server and ran the example curl. It returned
+**`504` after three minutes**. The handling was correct — no crash, no hang, a clean error
+— but a stranger cloning this repo would have hit exactly that, which fails the whole point
+of the exercise.
+
+**Wrong fix #1: warm the model at startup.** I assumed the cost was loading 5GB of weights
+into RAM. I added a startup warm-up that sent a short "say ok" message. It completed in
+23s. The first real request still returned `504`.
+
+So I measured instead of assuming again, and found the cost was somewhere else:
+
+| | Duration |
+|---|---|
+| Load weights (short throwaway message) | ~23s |
+| **First call carrying the ~940-token system prompt** | **78.5s** |
+| Next call carrying the same system prompt | 28.2s |
+
+The expensive part is **prefilling the system prompt**, not loading the model. The provider
+caches the prompt prefix, so that cost is paid once — by whoever arrives first. A warm-up
+with an unrelated short message never touches that prefix, which is why it changed nothing.
+
+**Wrong fix #2: warm with the real prompt.** Correct idea, still broken: the warm-up ran
+through the normal client, so it hit the same 60s request timeout and gave up with
+`warm-up failed (APITimeoutError)`. A cold start legitimately exceeds 60s. Nobody is
+waiting during boot, so the warm-up needed its own budget.
+
+**What actually works:** warm up with the real system prompt, under a separate 600s budget.
+From fully cold — model evicted from RAM, fresh server:
+
+```
+warming up the model…
+warm-up done in 200.1s — model loaded and prompt prefix cached
+
+$ curl ... /enrich
+{"category":"mystery-thriller","audience":"adult",...}
+HTTP 200   in 36.7s
+```
+
+**The trade-off I chose:** the warm-up blocks startup, so the service takes ~200s from cold
+to serve anything, including `/health`. That would fail an aggressive liveness probe. I
+picked it because a slow boot is a better failure than a fast boot that 504s real traffic —
+but on a platform with health checks the right answer is to warm in the background and let
+the deadline cap early requests.
+
+There are now three regression tests for this, including one asserting the warm-up sends
+the real system prompt, because that was the non-obvious half.
 
 ### Why the timeout is 60s and not 30s
 
@@ -393,12 +448,12 @@ evals/run_eval.py      runs them through the live endpoint and scores them
    field has no such protection. It should be stripped of control characters and
    documented as user-influenced.
 
-2. **Fix the cold start, which is the only real availability risk here.** A warm call is
-   ~40s; the first call after the model unloads is ~66s and cost me a case in the first
-   eval run. A keep-alive ping on startup, or Ollama's `keep_alive` setting, removes it.
-   Right now the 60s timeout is above the warm case but below the cold one — I watched
-   it turn the README's own example curl into a `504` on a fresh server. Documented
-   rather than solved.
+2. **Warm up in the background rather than blocking startup.** The cold start is now
+   fixed, but I fixed it the blunt way: the service does not serve anything, `/health`
+   included, until the warm-up finishes — ~200s from fully cold. That is fine for a
+   local assignment and wrong for anything with a liveness probe. Warming in a
+   background task, with `/health` reporting `warming` until it completes, is the
+   version I would ship.
 
 3. **Cache on `hash(input + prompt_version)`.** Enrichment re-runs over the same 60
    scraped records constantly during development, and every re-run is 40 seconds of CPU
@@ -412,14 +467,13 @@ evals/run_eval.py      runs them through the live endpoint and scores them
 5. **Grow the eval to 25 cases, split easy and hard.** Eight cases means one flip is 12.5
    percentage points, which is too coarse to tell a real prompt improvement from noise.
 
-6. **Do not retry a timeout three times on a cold model.** Verifying the README's own
-   curl, I sent the first request after a restart and got a clean `504` — the cold load
-   exceeded 60s, and the retry policy then tried twice more, so the caller waited ~3
-   minutes to be told no. The handling was correct and the process never wobbled, but
-   retrying a *timeout* is only sensible if the cause was transient; a model that is
-   still loading will still be loading four seconds later. A cold-start probe, or not
-   retrying timeouts at all, is the better policy.
+6. **Reconsider retrying timeouts at all.** The 90s deadline now stops three 60s
+   attempts stacking into a three-minute wait, but that is a cap on a bad policy rather
+   than a good policy. Retrying is only sensible if the cause was transient, and a model
+   that is still loading will still be loading four seconds later. Distinguishing "timed
+   out because the provider is slow" from "timed out because it is cold" would let the
+   first retry and the second fail fast.
 
-   The upside: this is no longer a mocked test. The `504` path has now fired against a
-   genuinely slow real model, which is stronger evidence than my `APITimeoutError`
-   injection provides.
+   One upside of getting this wrong: the `504` path has now fired against a genuinely
+   slow real model, repeatedly, which is far better evidence than my mocked
+   `APITimeoutError` test.

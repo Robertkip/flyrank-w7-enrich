@@ -63,10 +63,18 @@ def call_with_retries(
     fn: Callable[[], T],
     *,
     max_attempts: int,
+    deadline_seconds: float | None = None,
     sleep: Callable[[float], None] = time.sleep,
+    now: Callable[[], float] = time.monotonic,
 ) -> T:
-    """Run fn, retrying only the failures that deserve it."""
+    """Run fn, retrying only the failures that deserve it, within a total deadline.
+
+    The deadline matters most for timeouts. Retrying a 429 costs a second of backoff;
+    retrying a 60s timeout costs another 60 seconds, and three attempts means the
+    caller waits three minutes for a failure. The deadline caps the whole request.
+    """
     last: BaseException | None = None
+    started = now()
 
     for attempt in range(1, max_attempts + 1):
         try:
@@ -82,7 +90,12 @@ def call_with_retries(
                 raise
             if attempt == max_attempts:
                 break
-            sleep(backoff_seconds(attempt, exc))
+            wait = backoff_seconds(attempt, exc)
+            if deadline_seconds is not None and (now() - started) + wait >= deadline_seconds:
+                # Another attempt would blow the budget. Fail now rather than make the
+                # caller wait for an answer we have already run out of time to get.
+                break
+            sleep(wait)
 
     if isinstance(last, openai.APITimeoutError):
         raise TimeoutExhausted(f"The model did not answer within the timeout after {max_attempts} attempts.") from last

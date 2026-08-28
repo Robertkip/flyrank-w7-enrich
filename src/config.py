@@ -45,6 +45,36 @@ def timeout_seconds() -> float:
     return float(os.getenv("LLM_TIMEOUT_SECONDS", "60"))
 
 
+def warmup() -> bool:
+    """Load the model into RAM at startup so the first real request is not the cold one.
+
+    A local 7B model on CPU takes ~30s longer on its first call than on every call
+    after it. Paying that once at boot, where nobody is waiting on an HTTP response,
+    is strictly better than making the first caller pay it and time out.
+    """
+    return _flag("LLM_WARMUP", "true")
+
+
+def warmup_timeout_seconds() -> float:
+    """How long the startup warm-up may take. Deliberately far longer than a request.
+
+    A truly cold start on this CPU box — loading 5GB of weights, then prefilling the
+    ~940-token system prompt — exceeds 60s, so the warm-up was timing out against the
+    request timeout and leaving the first caller to pay the cost anyway. Nobody is
+    waiting during boot, so it gets a generous budget.
+    """
+    return float(os.getenv("LLM_WARMUP_TIMEOUT_SECONDS", "600"))
+
+
+def deadline_seconds() -> float:
+    """The most wall-clock time one /enrich request may spend on retries, total.
+
+    Without this, 3 attempts x a 60s timeout is a caller waiting three minutes to be
+    told no. The per-call timeout bounds one call; this bounds the whole request.
+    """
+    return float(os.getenv("LLM_DEADLINE_SECONDS", "90"))
+
+
 def max_attempts() -> int:
     """Total attempts per call, including the first. 3 -> the first plus two retries."""
     return int(os.getenv("LLM_MAX_ATTEMPTS", "3"))

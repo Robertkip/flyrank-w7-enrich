@@ -50,6 +50,7 @@ def enrich(title: str, description: str, rating: int | None) -> Enrichment:
         completion = retry.call_with_retries(
             lambda: client.complete(system, messages),
             max_attempts=config.max_attempts(),
+            deadline_seconds=config.deadline_seconds(),
         )
         totals["input"] += completion.input_tokens
         totals["output"] += completion.output_tokens

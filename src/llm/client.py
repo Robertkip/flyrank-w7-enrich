@@ -55,10 +55,24 @@ def reset_client() -> None:
     _client = None
 
 
-def complete(system: str, messages: list[dict[str, str]]) -> Completion:
-    """One call to the model. Raises the SDK's exceptions; retry.py decides what to do."""
+def complete(
+    system: str,
+    messages: list[dict[str, str]],
+    *,
+    timeout: float | None = None,
+) -> Completion:
+    """One call to the model. Raises the SDK's exceptions; retry.py decides what to do.
+
+    `timeout` overrides the client default for this call only. It exists for the
+    startup warm-up, which may legitimately take several minutes on a cold CPU box
+    and has nobody waiting on it. Request-path callers leave it None and get the
+    configured 60s.
+    """
     started = time.monotonic()
-    res = _get_client().chat.completions.create(
+    caller = _get_client()
+    if timeout is not None:
+        caller = caller.with_options(timeout=timeout)
+    res = caller.chat.completions.create(
         model=config.model(),
         # Low temperature: we want the same answer for the same input, not creativity.
         temperature=0,

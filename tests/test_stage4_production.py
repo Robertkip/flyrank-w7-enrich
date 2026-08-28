@@ -205,3 +205,127 @@ def test_the_route_does_not_block_the_event_loop():
         "enrich() blocks on a slow model call, so it must be `def` (threadpool), "
         "not `async def` (event loop)"
     )
+
+
+# --- the deadline, added after a real 504 took three minutes -----------------------
+
+def test_retries_stop_at_the_deadline_instead_of_burning_the_full_attempt_budget():
+    """The bug this exists to prevent: a cold model timed out at 60s, retried twice,
+    and the caller waited 3 minutes to be told no. The per-call timeout bounds one
+    call; the deadline bounds the whole request."""
+    attempts = []
+    clock = {"t": 0.0}
+
+    def slow_timeout():
+        attempts.append(1)
+        clock["t"] += 60.0  # each attempt burns the full 60s timeout
+        raise _timeout()
+
+    with pytest.raises(retry.TimeoutExhausted):
+        retry.call_with_retries(
+            slow_timeout,
+            max_attempts=3,
+            deadline_seconds=90.0,
+            sleep=lambda s: clock.__setitem__("t", clock["t"] + s),
+            now=lambda: clock["t"],
+        )
+
+    assert len(attempts) == 2, f"a 90s deadline must not allow 3x60s of attempts, got {len(attempts)}"
+    assert clock["t"] <= 130, "the caller must not wait three minutes for a failure"
+
+
+def test_the_deadline_does_not_interfere_with_fast_retries():
+    """A 429 costs a second of backoff, not a minute. Those retries should still run."""
+    attempts = []
+    clock = {"t": 0.0}
+
+    def flaky():
+        attempts.append(1)
+        if len(attempts) < 3:
+            raise _api_error(429)
+        return "recovered"
+
+    got = retry.call_with_retries(
+        flaky, max_attempts=3, deadline_seconds=90.0,
+        sleep=lambda s: clock.__setitem__("t", clock["t"] + s), now=lambda: clock["t"],
+    )
+    assert got == "recovered" and len(attempts) == 3
+
+
+def test_deadline_is_configured_below_max_attempts_times_timeout():
+    """Otherwise the deadline is decorative."""
+    assert config.deadline_seconds() < config.max_attempts() * config.timeout_seconds()
+
+
+# --- the warm-up -------------------------------------------------------------------
+
+def test_warmup_is_skipped_when_no_real_call_could_happen(monkeypatch):
+    """Warming in stub mode or with the kill switch on would defeat both switches."""
+    from src import main
+
+    called = []
+    monkeypatch.setattr(main, "_warm_the_model", lambda: called.append(1))
+
+    monkeypatch.setenv("LLM_STUB", "1")
+    with TestClient(main.app):
+        pass
+    assert called == [], "stub mode must not call the model, not even to warm it"
+
+    monkeypatch.setenv("LLM_STUB", "0")
+    monkeypatch.setenv("LLM_ENABLED", "false")
+    with TestClient(main.app):
+        pass
+    assert called == [], "the kill switch must not be bypassed by the warm-up"
+
+
+def test_a_failing_warmup_does_not_stop_the_service_starting(monkeypatch):
+    """A warm-up is an optimisation, not a dependency."""
+    from src import main
+
+    def explode(system, messages):
+        raise openai.APIConnectionError(request=httpx.Request("POST", "http://test/"))
+
+    monkeypatch.setattr(llm_client, "complete", explode)
+    monkeypatch.setenv("LLM_WARMUP", "true")
+
+    with TestClient(main.app) as c:
+        assert c.get("/health").status_code == 200, "the service must start even if warm-up fails"
+
+
+def test_warmup_uses_the_real_system_prompt_not_a_throwaway(monkeypatch):
+    """The expensive cold cost is prefilling the ~940-token system prompt, not loading
+    weights. Warming with a short unrelated message leaves that cost for the first
+    caller — which is exactly how the cold-start 504 survived the first fix."""
+    from src import main
+    from src.llm import prompt
+
+    seen = {}
+
+    def capture(system, messages, timeout=None):
+        seen["system"] = system
+        return llm_client.Completion(text="ok", model="m", input_tokens=1, output_tokens=1, duration_ms=1)
+
+    monkeypatch.setattr(llm_client, "complete", capture)
+    main._warm_the_model()
+
+    assert seen["system"] == prompt.system_prompt(), (
+        "the warm-up must send the real system prompt so the provider caches that prefix"
+    )
+
+
+def test_warmup_gets_a_longer_budget_than_a_request(monkeypatch):
+    """A cold start exceeds the 60s request timeout, so warming under that timeout
+    fails and leaves the cost for the first caller — observed, not theorised."""
+    assert config.warmup_timeout_seconds() > config.timeout_seconds()
+
+    from src import main
+    from src.llm import client as c
+
+    seen = {}
+    monkeypatch.setattr(
+        c, "complete",
+        lambda system, messages, timeout=None: seen.update(timeout=timeout)
+        or c.Completion(text="ok", model="m", input_tokens=1, output_tokens=1, duration_ms=1),
+    )
+    main._warm_the_model()
+    assert seen["timeout"] == config.warmup_timeout_seconds()
