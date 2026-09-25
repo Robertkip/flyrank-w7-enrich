@@ -63,7 +63,7 @@ def enrich(title: str, description: str, rating: int | None) -> Enrichment:
         except (parse.ParseError, ValidationError) as exc:
             last_error = _readable(exc)
             costlog.record(
-                prompt_version=prompt.PROMPT_VERSION,
+                prompt_version=prompt.version(),
                 model=completion.model,
                 provider=config.base_url(),
                 input_tokens=completion.input_tokens,
@@ -84,7 +84,7 @@ def enrich(title: str, description: str, rating: int | None) -> Enrichment:
             continue
 
         costlog.record(
-            prompt_version=prompt.PROMPT_VERSION,
+            prompt_version=prompt.version(),
             model=completion.model,
             provider=config.base_url(),
             input_tokens=completion.input_tokens,
@@ -107,7 +107,7 @@ def enrich(title: str, description: str, rating: int | None) -> Enrichment:
         request={"title": title, "description": description, "rating": rating},
         raw_output=last_raw,
         error=last_error,
-        prompt_version=prompt.PROMPT_VERSION,
+        prompt_version=prompt.version(),
         model=config.model(),
         attempts=2,
     )

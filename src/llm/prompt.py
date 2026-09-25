@@ -9,13 +9,27 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
+from src import config
+
 PROMPT_DIR = Path(__file__).resolve().parents[2] / "prompts"
-PROMPT_VERSION = "enrich-v1"
+
+
+def version() -> str:
+    """The active prompt version (LLM_PROMPT_VERSION), e.g. "enrich-v2"."""
+    return config.prompt_version()
+
+
+def system_prompt(version_name: str | None = None) -> str:
+    return _read(version_name or version())
 
 
 @lru_cache(maxsize=None)
-def system_prompt(version: str = PROMPT_VERSION) -> str:
-    return (PROMPT_DIR / f"{version}.md").read_text(encoding="utf-8")
+def _read(version_name: str) -> str:
+    path = PROMPT_DIR / f"{version_name}.md"
+    if not path.is_file():
+        available = ", ".join(sorted(p.stem for p in PROMPT_DIR.glob("*.md")))
+        raise FileNotFoundError(f"no prompt {version_name!r} in prompts/ (have: {available})")
+    return path.read_text(encoding="utf-8")
 
 
 def user_message(title: str, description: str, rating: int | None) -> str:

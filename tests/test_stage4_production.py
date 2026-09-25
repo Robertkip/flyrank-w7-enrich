@@ -153,7 +153,7 @@ def test_every_call_logs_version_model_tokens_duration_and_repair(fake_model, tm
     for field in ("prompt_version", "model", "provider", "input_tokens", "output_tokens",
                   "total_tokens", "duration_ms", "attempt", "is_repair", "outcome"):
         assert field in line, f"the cost log must record {field}"
-    assert line["prompt_version"] == "enrich-v1"
+    assert line["prompt_version"] == config.prompt_version()
     assert line["total_tokens"] == line["input_tokens"] + line["output_tokens"]
 
 

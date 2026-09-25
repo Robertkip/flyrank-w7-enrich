@@ -33,6 +33,15 @@ def model() -> str:
     return os.environ["LLM_MODEL"]
 
 
+def prompt_version() -> str:
+    """Which file in prompts/ is the system prompt, e.g. "enrich-v2".
+
+    Switchable so v1 and v2 can be evaluated against the same cases without editing
+    code between runs. The version is written on every log line and quarantine entry.
+    """
+    return os.getenv("LLM_PROMPT_VERSION", "enrich-v2").strip()
+
+
 def timeout_seconds() -> float:
     """Explicit, and measured rather than guessed.
 

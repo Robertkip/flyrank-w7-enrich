@@ -5,6 +5,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from src import config
 from src.llm import parse, quarantine
 from src.main import app
 
@@ -120,7 +121,7 @@ def test_failure_writes_a_quarantine_line_with_input_error_and_prompt_version(fa
     client.post("/enrich", json=VALID)
 
     line = json.loads(qfile.read_text().strip())
-    assert line["prompt_version"] == "enrich-v1"
+    assert line["prompt_version"] == config.prompt_version()
     assert line["request"]["title"] == VALID["title"]
     assert line["raw_model_output"] == "still not json"
     assert line["error"]

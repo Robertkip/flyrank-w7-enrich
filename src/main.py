@@ -106,4 +106,5 @@ async def health():
         "llm_enabled": config.llm_enabled(),
         "stub_mode": config.stub_mode(),
         "model": config.model(),
+        "prompt_version": config.prompt_version(),
     }

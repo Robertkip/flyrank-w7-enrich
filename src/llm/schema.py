@@ -5,9 +5,15 @@ from outside the system, exactly like a scraped page or a request body — so it
 through this file before it reaches a caller.
 """
 
+import re
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+# C0/C1 control characters, zero-width and bidi-override characters. None of them
+# belong in a one-sentence summary, and all of them can hide or reorder text when a
+# consumer renders it.
+_INVISIBLE = re.compile(r"[\x00-\x1f\x7f-\x9f​-\u200F\u202A-\u202E\u2066-\u2069﻿]")
 
 
 class Category(str, Enum):
@@ -60,6 +66,21 @@ class EnrichResponse(BaseModel):
     quality_flags: list[QualityFlag] = Field(default_factory=list)
     confidence: float = Field(ge=0.0, le=1.0)
     reason: str = Field(min_length=1, max_length=200)
+
+    @field_validator("summary", "reason", mode="before")
+    @classmethod
+    def _clean_free_text(cls, value):
+        """The two free-text fields are the one channel scraped text can leak through.
+
+        The injection tests showed the model will sometimes echo an attacker's sentence
+        into `summary`. The enums make `category` safe; this is the equivalent for the
+        free text: invisible and control characters are removed and whitespace collapsed
+        *before* the length checks run. A summary that is only junk becomes empty, fails
+        min_length, and goes through the normal repair path.
+        """
+        if not isinstance(value, str):
+            return value
+        return " ".join(_INVISIBLE.sub(" ", value).split())
 
 
 class ErrorResponse(BaseModel):

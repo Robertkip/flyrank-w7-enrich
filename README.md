@@ -17,23 +17,67 @@ exactly what was wrong and lets it try **once** more. If it fails again, you get
 error and the bad answer is written to a quarantine file for a human to look at. You never
 receive text the model wrote directly — only values this API has checked.
 
+**Who it is for:** anyone with a catalogue of scraped or supplier-provided product records
+that are missing a category: a small bookshop, a marketplace listing pipeline, a data team
+cleaning a feed. It is built for batch enrichment (tens to thousands of records, run in the
+background), not for a live page where a user waits. See [Limitations](#limitations) for why.
+
+**Demo video:** TODO: link (4 minutes, live run, no slides)
+
+### How it fits together
+
+```
+ Week 5 scraper                          this API
+ books.json ──► POST /enrich ──► EnrichRequest ──400──► caller   (bad input: no model call)
+                                    │ valid
+                                    ▼
+                       prompts/enrich-v2.md  (system)  +  the record, JSON-encoded (user)
+                                    │
+                                    ▼
+                     client.complete()  ── retry.py: timeout 60s, 3 attempts, 90s deadline
+                     Ollama qwen2.5:7b      (swap to any OpenAI-compatible host: 3 env vars)
+                                    │
+                                    ▼
+                  parse.py: find the JSON ──► EnrichResponse (enums, lengths, cleaned text)
+                                    │ valid                     │ invalid
+                                    ▼                           ▼
+                             200 + six fields        one repair call with the exact error
+                                                                │ still invalid
+                                                                ▼
+                                           422 + logs/quarantine.jsonl  (raw text never returned)
+
+ every model call ──► logs/calls.jsonl (prompt version, model, tokens, ms, outcome)
+```
+
 ---
 
 ## Try it in five minutes
 
+You need Python 3.11+, about 6 GB of free RAM for the model, and roughly 5 GB of disk.
+No GPU and no API key are needed.
+
 ```bash
-git clone <this repo> && cd fly-rank_tasks
+git clone https://github.com/Robertkip/flyrank-w7-enrich.git && cd flyrank-w7-enrich
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
-# 1. Install Ollama from https://ollama.com, then pull the model:
+# 1. Install Ollama from https://ollama.com, then pull the model (~4.7 GB):
 ollama pull qwen2.5:7b
 
 # 2. Copy the example env file. For Ollama the defaults already work — no key needed.
 cp .env.example .env
 
-# 3. Run it
-.venv/bin/uvicorn src.main:app --reload
+# 3. Check the install without touching the model (79 tests, ~4s):
+.venv/bin/python -m pytest tests -q
+
+# 4. Run it, and wait for "warm-up done" in the log before sending requests
+.venv/bin/uvicorn src.main:app
 ```
+
+No Ollama, or just want to see the API shape first? Run with `LLM_STUB=1` and every request
+returns a canned, schema-valid answer without calling a model.
+
+The system prompt is chosen by `LLM_PROMPT_VERSION` (default `enrich-v2`). `enrich-v1` is
+kept unchanged so the two can be compared on the same eval.
 
 ### The curl, and its real response
 
@@ -410,7 +454,7 @@ API docs that it is user-influenced text. That is the first thing on the list be
 .venv/bin/python -m pytest tests/ -q
 ```
 
-58 tests, all using a fake provider — **zero model calls**, so they run in about four
+79 tests, all using a fake provider — **zero model calls**, so they run in about four
 seconds and cost nothing. They cover input validation, JSON extraction from realistically
 messy model output, the repair-once rule, quarantine contents, the retry classification
 table, backoff with jitter, `Retry-After`, the cost log, and both switches.
@@ -434,9 +478,11 @@ src/llm/parse.py       finds the JSON object in whatever the model actually said
 src/llm/pipeline.py    call -> parse -> validate -> repair once -> quarantine
 src/llm/costlog.py     one structured line per model call
 src/llm/quarantine.py  where an untrustworthy answer goes
-prompts/enrich-v1.md   the prompt, versioned, reviewable, diffable
-evals/cases.json       8 hand-labelled cases
-evals/run_eval.py      runs them through the live endpoint and scores them
+prompts/enrich-v1.md   the original prompt, kept unchanged for comparison
+prompts/enrich-v2.md   the current prompt (LLM_PROMPT_VERSION picks one)
+evals/cases.json       21 labelled cases in three sets: original, added-v2, injection
+evals/run_eval.py      runs them through the live endpoint, scores them, saves results
+evals/results/         one JSON file per eval run, per-case answers included
 ```
 
 ---

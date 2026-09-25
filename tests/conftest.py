@@ -9,7 +9,7 @@ os.environ["LLM_ENABLED"] = "true"
 
 import pytest
 
-from src.llm import client
+from src.llm import client, costlog, quarantine
 
 
 @pytest.fixture(autouse=True)
@@ -17,6 +17,15 @@ def clean_switches(monkeypatch):
     """Every test starts with the switches off, whatever the developer's .env says."""
     monkeypatch.setenv("LLM_STUB", "0")
     monkeypatch.setenv("LLM_ENABLED", "true")
+
+
+@pytest.fixture(autouse=True)
+def logs_in_tmp(monkeypatch, tmp_path):
+    """Fake calls must never land in the real logs/. They did: 48 "test-model" lines
+    were found mixed into logs/calls.jsonl, which the cost figures are read from.
+    Tests that inspect a log file still override these paths themselves."""
+    monkeypatch.setattr(costlog, "CALLS_PATH", tmp_path / "calls.jsonl")
+    monkeypatch.setattr(quarantine, "QUARANTINE_PATH", tmp_path / "quarantine.jsonl")
 
 
 @pytest.fixture
